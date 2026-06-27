@@ -1,0 +1,20 @@
+```text
+
+1. Create a folder named "models" in the same directory as app.py.
+2. Copy your best model file into that folder:
+   efficientnet_v2_s_best.pth
+
+3. Run locally:
+   streamlit run app.py
+
+4. For public deployment, easiest options:
+   - Streamlit Community Cloud
+   - Hugging Face Spaces
+
+5. Your demo should show:
+   - image upload
+   - predicted class
+   - confidence
+   - top 3 predictions
+   - Grad-CAM heatmap
+```
