@@ -1,4 +1,3 @@
-```text
 
 streamlit
 torch
@@ -6,4 +5,4 @@ torchvision
 pillow
 numpy
 pandas
-```
+
