@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms, models
+from pathlib import Path
 from torchvision.models import EfficientNet_V2_S_Weights
 
 
@@ -24,7 +25,8 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = "models/efficientnet_v2_s_best.pth"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "models" / "efficientnet_v2_s_best.pth"
 
 
 # -----------------------------
@@ -43,6 +45,10 @@ def build_efficientnet_v2_s(num_classes=3, dropout=0.30):
 @st.cache_resource
 def load_model():
     model = build_efficientnet_v2_s(num_classes=len(CLASS_NAMES))
+
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
+
     state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
     model.load_state_dict(state_dict, strict=False)
     model.to(DEVICE)
