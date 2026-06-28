@@ -1,4 +1,4 @@
-```text
+
 
 1. Create a folder named "models" in the same directory as app.py.
 2. Copy your best model file into that folder:
@@ -17,4 +17,4 @@
    - confidence
    - top 3 predictions
    - Grad-CAM heatmap
-```
+
