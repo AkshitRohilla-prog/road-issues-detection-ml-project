@@ -19,7 +19,7 @@ layout="wide",
 initial_sidebar_state="expanded",
 )
 
-BASE_DIR = Path(**file**).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "models" / "efficientnet_v2_s_best.pth"
 
 CLASS_NAMES = [
