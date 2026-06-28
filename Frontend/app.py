@@ -1,4 +1,4 @@
-```python
+
 import os
 from pathlib import Path
 from typing import Tuple
@@ -443,4 +443,3 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-```
