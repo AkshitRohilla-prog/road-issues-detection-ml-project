@@ -49,7 +49,11 @@ def load_model():
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
 
-    state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
+    try:
+        state_dict = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True)
+    except Exception:
+        state_dict = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=False)
+
     model.load_state_dict(state_dict, strict=False)
     model.to(DEVICE)
     model.eval()
