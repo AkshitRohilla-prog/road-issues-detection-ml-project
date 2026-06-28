@@ -1,9 +1,8 @@
-import os
-from pathlib import Path
-from typing import Dict, Tuple
-
 import numpy as np
 import pandas as pd
+from pathlib import Path
+from typing import Tuple
+
 from PIL import Image
 
 import streamlit as st
@@ -33,7 +32,7 @@ initial_sidebar_state="expanded",
 # =========================================================
 
 BASE_DIR = Path(**file**).resolve().parent
-MODELS_DIR = BASE_DIR / "models"
+MODEL_PATH = BASE_DIR / "models" / "efficientnet_v2_s_best.pth"
 
 CLASS_NAMES = [
 "Pothole Issues",
@@ -43,12 +42,6 @@ CLASS_NAMES = [
 
 IMAGE_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-MODEL_FILES = {
-"EfficientNetV2-S": MODELS_DIR / "efficientnet_v2_s_best.pth",
-"ConvNeXt-Tiny": MODELS_DIR / "convnext_tiny_best.pth",
-"Custom CNN": MODELS_DIR / "cnn_baseline_best.pth",
-}
 
 MODEL_RESULTS = pd.DataFrame({
 "Model": ["Custom CNN", "EfficientNetV2-S", "ConvNeXt-Tiny"],
@@ -60,9 +53,11 @@ MODEL_RESULTS = pd.DataFrame({
 "Model Size (MB)": [0.43, 77.85, 106.20],
 })
 
+BEST_MODEL_NAME = "EfficientNetV2-S"
+
 # =========================================================
 
-# CUSTOM CSS
+# CSS STYLING
 
 # =========================================================
 
@@ -160,10 +155,6 @@ padding-top: 1rem;
     overflow: hidden;
 }
 
-.stSelectbox > div > div {
-    border-radius: 12px;
-}
-
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
 }
@@ -187,6 +178,7 @@ unsafe_allow_html=True,
 
 with st.sidebar:
 st.title("⚙️ App Information")
+st.markdown(f"**Live Model:** {BEST_MODEL_NAME}")
 st.markdown("**Task:** 3-Class Road Issue Classification")
 st.markdown("**Input Size:** 224 × 224")
 st.markdown("**Framework:** PyTorch + Streamlit")
@@ -204,8 +196,8 @@ st.markdown(
     """
     - Upload a clear road image  
     - JPG / PNG / WEBP supported  
-    - Best results come from visible road-surface defects  
-    - If a model file is missing, it will not be available for live prediction
+    - Live prediction uses EfficientNetV2-S  
+    - Comparison table shows all 3 trained project models
     """
 )
 ```
@@ -217,104 +209,38 @@ st.markdown(
 # =========================================================
 
 st.markdown(
-""" <div class="hero-box"> <div class="hero-title">🛣️ Road Issues Detection using Deep Learning</div> <div class="hero-subtitle">
+f""" <div class="hero-box"> <div class="hero-title">🛣️ Road Issues Detection using Deep Learning</div> <div class="hero-subtitle">
 Upload a road image to classify it into <b>Pothole Issues</b>, <b>Damaged Road issues</b>, or <b>Mixed Issues</b>.<br>
-This prototype compares three trained models and supports a more polished
-smart-city inspection workflow. </div> </div>
+This demo uses the best-performing model: <b>{BEST_MODEL_NAME}</b>. </div> </div>
 """,
 unsafe_allow_html=True,
 )
 
 # =========================================================
 
-# MODEL DEFINITIONS
+# MODEL
 
 # =========================================================
 
-class CNNBaseline(nn.Module):
-def **init**(self, num_classes: int = 3):
-super().**init**()
-self.features = nn.Sequential(
-nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
-nn.BatchNorm2d(32),
-nn.ReLU(),
-nn.MaxPool2d(kernel_size=2, stride=2),
-
-```
-        nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-        nn.BatchNorm2d(64),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-
-        nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-        nn.BatchNorm2d(128),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=2, stride=2),
-    )
-
-    self.pool = nn.AdaptiveAvgPool2d((1, 1))
-    self.classifier = nn.Sequential(
-        nn.Flatten(),
-        nn.Linear(128, 128),
-        nn.ReLU(),
-        nn.Dropout(0.3),
-        nn.Linear(128, num_classes),
-    )
-
-def forward(self, x):
-    x = self.features(x)
-    x = self.pool(x)
-    x = self.classifier(x)
-    return x
-```
-
-def build_model(model_name: str) -> nn.Module:
-if model_name == "EfficientNetV2-S":
+def build_model() -> nn.Module:
 model = models.efficientnet_v2_s(weights=None)
 in_features = model.classifier[1].in_features
 model.classifier[1] = nn.Linear(in_features, len(CLASS_NAMES))
 return model
 
-```
-if model_name == "ConvNeXt-Tiny":
-    model = models.convnext_tiny(weights=None)
-    in_features = model.classifier[2].in_features
-    model.classifier[2] = nn.Linear(in_features, len(CLASS_NAMES))
-    return model
-
-if model_name == "Custom CNN":
-    return CNNBaseline(num_classes=len(CLASS_NAMES))
-
-raise ValueError(f"Unknown model name: {model_name}")
-```
-
-def get_available_models() -> Dict[str, Path]:
-available = {}
-for name, path in MODEL_FILES.items():
-if path.exists():
-available[name] = path
-return available
-
 @st.cache_resource
-def load_model(model_name: str) -> nn.Module:
-model_path = MODEL_FILES[model_name]
-if not model_path.exists():
-raise FileNotFoundError(f"Model file not found: {model_path}")
+def load_model() -> nn.Module:
+if not MODEL_PATH.exists():
+raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
 
 ```
-model = build_model(model_name)
-state_dict = torch.load(model_path, map_location=DEVICE)
+model = build_model()
+state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
 model.load_state_dict(state_dict)
 model.to(DEVICE)
 model.eval()
 return model
 ```
-
-# =========================================================
-
-# TRANSFORMS
-
-# =========================================================
 
 transform = transforms.Compose([
 transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -349,7 +275,7 @@ return pred_class, confidence, probs
 
 # =========================================================
 
-# PLACEHOLDER EXPLAINABILITY
+# PLACEHOLDER EXPLAINABILITY OVERLAY
 
 # =========================================================
 
@@ -382,36 +308,7 @@ return Image.fromarray(heatmap_img), Image.fromarray(overlay_img)
 
 # =========================================================
 
-# MODEL SELECTION
-
-# =========================================================
-
-available_models = get_available_models()
-
-if len(available_models) == 0:
-st.error(
-"No model files were found in Frontend/models/. Please add at least one of these files: "
-"efficientnet_v2_s_best.pth, convnext_tiny_best.pth, cnn_baseline_best.pth"
-)
-st.stop()
-
-selected_model_name = st.selectbox(
-"Select model for live prediction",
-list(available_models.keys()),
-index=0,
-)
-
-st.markdown(
-f""" <div class="info-box"> <b>Selected Model:</b> {selected_model_name}<br>
-Live prediction currently uses the selected model above.
-The comparison table below still shows the saved project results for all three trained models. </div>
-""",
-unsafe_allow_html=True,
-)
-
-# =========================================================
-
-# FILE UPLOADER
+# FILE UPLOAD
 
 # =========================================================
 
@@ -422,7 +319,7 @@ type=["jpg", "jpeg", "png", "webp"],
 
 if uploaded_file is not None:
 image = Image.open(uploaded_file).convert("RGB")
-model = load_model(selected_model_name)
+model = load_model()
 pred_class, confidence, probs = predict_image(model, image)
 
 ```
@@ -463,7 +360,7 @@ with c3:
         f"""
         <div class="metric-card">
             <div class="metric-title">Live Model</div>
-            <div class="metric-value" style="font-size:1.18rem;">{selected_model_name}</div>
+            <div class="metric-value" style="font-size:1.18rem;">{BEST_MODEL_NAME}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -505,7 +402,7 @@ tab1, tab2, tab3 = st.tabs(["Explainability", "Model Details", "How to Read Resu
 with tab1:
     st.markdown("<div class='section-title'>Grad-CAM Style Explanation</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='soft-note'>This is a styled placeholder overlay. You can replace it later with your exact Grad-CAM implementation if you want.</div>",
+        "<div class='soft-note'>This is a styled placeholder overlay. You can replace it later with your exact Grad-CAM implementation.</div>",
         unsafe_allow_html=True,
     )
 
@@ -527,7 +424,7 @@ with tab2:
         st.markdown(
             f"""
             <div class="info-box">
-                <b>Architecture:</b> {selected_model_name}<br>
+                <b>Architecture:</b> {BEST_MODEL_NAME}<br>
                 <b>Task:</b> 3-class road issue classification<br>
                 <b>Input Size:</b> 224 × 224<br>
                 <b>Deployment:</b> Streamlit
@@ -605,7 +502,7 @@ unsafe_allow_html=True,
 
 # =========================================================
 
-# ADVANCED FOOTER
+# FOOTER
 
 # =========================================================
 
