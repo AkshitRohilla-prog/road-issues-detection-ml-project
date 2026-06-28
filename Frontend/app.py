@@ -12,12 +12,6 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision import models
 
-# =========================================================
-
-# PAGE CONFIG
-
-# =========================================================
-
 st.set_page_config(
 page_title="Road Issues Detection",
 page_icon="🛣️",
@@ -25,13 +19,7 @@ layout="wide",
 initial_sidebar_state="expanded",
 )
 
-# =========================================================
-
-# CONFIG
-
-# =========================================================
-
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(**file**).resolve().parent
 MODEL_PATH = BASE_DIR / "models" / "efficientnet_v2_s_best.pth"
 
 CLASS_NAMES = [
@@ -54,12 +42,6 @@ MODEL_RESULTS = pd.DataFrame({
 })
 
 BEST_MODEL_NAME = "EfficientNetV2-S"
-
-# =========================================================
-
-# CSS STYLING
-
-# =========================================================
 
 st.markdown(
 """ <style>
@@ -160,12 +142,6 @@ unsafe_allow_html=True,
 
 )
 
-# =========================================================
-
-# SIDEBAR
-
-# =========================================================
-
 with st.sidebar:
 st.title("⚙️ App Information")
 st.markdown(f"**Live Model:** {BEST_MODEL_NAME}")
@@ -187,16 +163,10 @@ st.markdown(
     - Upload a clear road image  
     - JPG / PNG / WEBP supported  
     - Live prediction uses EfficientNetV2-S  
-    - Comparison table shows all 3 trained project models  
+    - Comparison table shows all 3 trained project models
     """
 )
 ```
-
-# =========================================================
-
-# HERO SECTION
-
-# =========================================================
 
 st.markdown(
 f""" <div class="hero-box"> <div class="hero-title">🛣️ Road Issues Detection using Deep Learning</div> <div class="hero-subtitle">
@@ -205,12 +175,6 @@ This demo uses the best-performing model: <b>{BEST_MODEL_NAME}</b>. </div> </div
 """,
 unsafe_allow_html=True,
 )
-
-# =========================================================
-
-# MODEL
-
-# =========================================================
 
 def build_model() -> nn.Module:
 model = models.efficientnet_v2_s(weights=None)
@@ -241,12 +205,6 @@ std=[0.229, 0.224, 0.225]
 ),
 ])
 
-# =========================================================
-
-# PREDICTION
-
-# =========================================================
-
 def predict_image(model: nn.Module, image: Image.Image) -> Tuple[str, float, np.ndarray]:
 img = image.convert("RGB")
 tensor = transform(img).unsqueeze(0).to(DEVICE)
@@ -262,12 +220,6 @@ confidence = float(probs[pred_idx])
 
 return pred_class, confidence, probs
 ```
-
-# =========================================================
-
-# PLACEHOLDER EXPLAINABILITY
-
-# =========================================================
 
 def generate_placeholder_overlay(image: Image.Image) -> Tuple[Image.Image, Image.Image]:
 img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
@@ -296,12 +248,6 @@ overlay_img = (overlay * 255).astype(np.uint8)
 return Image.fromarray(heatmap_img), Image.fromarray(overlay_img)
 ```
 
-# =========================================================
-
-# FILE UPLOAD
-
-# =========================================================
-
 uploaded_file = st.file_uploader(
 "Upload a road image",
 type=["jpg", "jpeg", "png", "webp"],
@@ -319,7 +265,6 @@ top_df = pd.DataFrame({
     "Confidence": [float(probs[i]) for i in top_indices],
 })
 
-# TOP METRICS
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(
@@ -381,7 +326,6 @@ with right_col:
 
     st.bar_chart(top_df.set_index("Class"))
 
-# TABS
 tab1, tab2, tab3 = st.tabs(["Explainability", "Model Details", "How to Read Results"])
 
 with tab1:
@@ -438,7 +382,7 @@ with tab3:
         - **Predicted Class** is the model's most likely class.  
         - **Confidence Score** is the probability assigned to that class.  
         - **Top Predictions** show how strongly the model considered the other classes.  
-        - **Overlay** highlights which road region most influenced the prediction.  
+        - **Overlay** highlights which road region most influenced the prediction.
         """
     )
 ```
@@ -452,12 +396,6 @@ and an explanation view. </div>
 """,
 unsafe_allow_html=True,
 )
-
-# =========================================================
-
-# MODEL COMPARISON
-
-# =========================================================
 
 st.markdown("<div class='section-title'>Model Comparison</div>", unsafe_allow_html=True)
 st.markdown(
@@ -484,12 +422,6 @@ f""" <div class="info-box"> <b>Best Overall Model:</b> {best_row["Model"]}<br> <
 """,
 unsafe_allow_html=True,
 )
-
-# =========================================================
-
-# FOOTER
-
-# =========================================================
 
 st.markdown("---")
 
