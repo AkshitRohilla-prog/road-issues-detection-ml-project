@@ -1,7 +1,6 @@
-
 import os
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -14,432 +13,630 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision import models
 
-import matplotlib.pyplot as plt
-
-
 # =========================================================
+
 # PAGE CONFIG
+
 # =========================================================
+
 st.set_page_config(
-    page_title="Road Issues Detection",
-    page_icon="🛣️",
-    layout="wide",
-    initial_sidebar_state="expanded",
+page_title="Road Issues Detection",
+page_icon="🛣️",
+layout="wide",
+initial_sidebar_state="expanded",
 )
 
 # =========================================================
+
 # CONFIG
+
 # =========================================================
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "models" / "efficientnet_v2_s_best.pth"   # change this only if needed
+
+BASE_DIR = Path(**file**).resolve().parent
+MODELS_DIR = BASE_DIR / "models"
 
 CLASS_NAMES = [
-    "Pothole Issues",
-    "Damaged Road issues",
-    "Mixed Issues",
+"Pothole Issues",
+"Damaged Road issues",
+"Mixed Issues",
 ]
 
 IMAGE_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+MODEL_FILES = {
+"EfficientNetV2-S": MODELS_DIR / "efficientnet_v2_s_best.pth",
+"ConvNeXt-Tiny": MODELS_DIR / "convnext_tiny_best.pth",
+"Custom CNN": MODELS_DIR / "cnn_baseline_best.pth",
+}
+
+MODEL_RESULTS = pd.DataFrame({
+"Model": ["Custom CNN", "EfficientNetV2-S", "ConvNeXt-Tiny"],
+"Accuracy": [0.4945, 0.9889, 0.9826],
+"Macro F1": [0.3053, 0.9689, 0.9473],
+"Weighted F1": [0.5570, 0.9889, 0.9825],
+"Top-2 Accuracy": [0.8183, 1.0000, 1.0000],
+"Inference Time (ms)": [0.685, 2.939, 3.957],
+"Model Size (MB)": [0.43, 77.85, 106.20],
+})
 
 # =========================================================
+
 # CUSTOM CSS
+
 # =========================================================
+
 st.markdown(
-    """
-    <style>
-    .main {
-        padding-top: 1rem;
-    }
+""" <style>
+.main {
+padding-top: 1rem;
+}
 
-    .hero-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 48%, #0ea5e9 100%);
-        padding: 30px;
-        border-radius: 24px;
-        color: white;
-        margin-bottom: 22px;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
-    }
+```
+.hero-box {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 48%, #0ea5e9 100%);
+    padding: 30px;
+    border-radius: 24px;
+    color: white;
+    margin-bottom: 22px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
 
-    .hero-title {
-        font-size: 2.15rem;
-        font-weight: 800;
-        margin-bottom: 8px;
-    }
+.hero-title {
+    font-size: 2.15rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
 
-    .hero-subtitle {
-        font-size: 1rem;
-        opacity: 0.96;
-        line-height: 1.7;
-    }
+.hero-subtitle {
+    font-size: 1rem;
+    opacity: 0.96;
+    line-height: 1.7;
+}
 
-    .metric-card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 20px;
-        padding: 18px;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-        text-align: center;
-    }
+.metric-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    text-align: center;
+}
 
-    .metric-title {
-        font-size: 0.92rem;
-        color: #64748b;
-        margin-bottom: 8px;
-    }
+.metric-title {
+    font-size: 0.92rem;
+    color: #64748b;
+    margin-bottom: 8px;
+}
 
-    .metric-value {
-        font-size: 1.6rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
+.metric-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #0f172a;
+}
 
-    .section-title {
-        font-size: 1.35rem;
-        font-weight: 750;
-        margin-top: 8px;
-        margin-bottom: 12px;
-        color: #0f172a;
-    }
+.section-title {
+    font-size: 1.35rem;
+    font-weight: 750;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    color: #0f172a;
+}
 
-    .info-box {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        padding: 16px;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-    }
+.info-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
 
-    .prediction-box {
-        background: #ecfeff;
-        border: 1px solid #bae6fd;
-        border-radius: 18px;
-        padding: 18px;
-        margin-bottom: 12px;
-    }
+.prediction-box {
+    background: #ecfeff;
+    border: 1px solid #bae6fd;
+    border-radius: 18px;
+    padding: 18px;
+    margin-bottom: 12px;
+}
 
-    .soft-note {
-        color: #475569;
-        font-size: 0.96rem;
-        line-height: 1.6;
-    }
+.soft-note {
+    color: #475569;
+    font-size: 0.96rem;
+    line-height: 1.6;
+}
 
-    .footer-box {
-        margin-top: 28px;
-        padding: 18px;
-        background: #f8fafc;
-        border-radius: 18px;
-        border: 1px solid #e2e8f0;
-        color: #475569;
-        font-size: 0.95rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+.footer-box {
+    margin-top: 28px;
+    padding: 18px;
+    background: #f8fafc;
+    border-radius: 18px;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.95rem;
+}
+
+.stDataFrame {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.stSelectbox > div > div {
+    border-radius: 12px;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 12px;
+    padding: 10px 16px;
+}
+</style>
+""",
+unsafe_allow_html=True,
+```
+
 )
 
 # =========================================================
+
 # SIDEBAR
+
 # =========================================================
+
 with st.sidebar:
-    st.title("⚙️ App Information")
-    st.markdown("**Model:** EfficientNetV2-S")
-    st.markdown("**Task:** 3-Class Road Issue Classification")
-    st.markdown("**Input Size:** 224 × 224")
-    st.markdown("**Framework:** PyTorch + Streamlit")
-    st.divider()
+st.title("⚙️ App Information")
+st.markdown("**Task:** 3-Class Road Issue Classification")
+st.markdown("**Input Size:** 224 × 224")
+st.markdown("**Framework:** PyTorch + Streamlit")
+st.divider()
 
-    st.markdown("### Supported Classes")
-    st.markdown("- Pothole Issues")
-    st.markdown("- Damaged Road issues")
-    st.markdown("- Mixed Issues")
-    st.divider()
+```
+st.markdown("### Supported Classes")
+st.markdown("- Pothole Issues")
+st.markdown("- Damaged Road issues")
+st.markdown("- Mixed Issues")
+st.divider()
 
-    st.markdown("### Tips")
-    st.markdown(
-        """
-        - Upload a clear road image  
-        - JPG / PNG / WEBP supported  
-        - Best results come from visible road-surface defects  
-        - Large, blurry, or dark images may reduce confidence
-        """
+st.markdown("### Tips")
+st.markdown(
+    """
+    - Upload a clear road image  
+    - JPG / PNG / WEBP supported  
+    - Best results come from visible road-surface defects  
+    - If a model file is missing, it will not be available for live prediction
+    """
+)
+```
+
+# =========================================================
+
+# HERO SECTION
+
+# =========================================================
+
+st.markdown(
+""" <div class="hero-box"> <div class="hero-title">🛣️ Road Issues Detection using Deep Learning</div> <div class="hero-subtitle">
+Upload a road image to classify it into <b>Pothole Issues</b>, <b>Damaged Road issues</b>, or <b>Mixed Issues</b>.<br>
+This prototype compares three trained models and supports a more polished
+smart-city inspection workflow. </div> </div>
+""",
+unsafe_allow_html=True,
+)
+
+# =========================================================
+
+# MODEL DEFINITIONS
+
+# =========================================================
+
+class CNNBaseline(nn.Module):
+def **init**(self, num_classes: int = 3):
+super().**init**()
+self.features = nn.Sequential(
+nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+nn.BatchNorm2d(32),
+nn.ReLU(),
+nn.MaxPool2d(kernel_size=2, stride=2),
+
+```
+        nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+        nn.BatchNorm2d(64),
+        nn.ReLU(),
+        nn.MaxPool2d(kernel_size=2, stride=2),
+
+        nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+        nn.MaxPool2d(kernel_size=2, stride=2),
     )
 
-# =========================================================
-# HERO SECTION
-# =========================================================
-st.markdown(
-    """
-    <div class="hero-box">
-        <div class="hero-title">🛣️ Road Issues Detection using Deep Learning</div>
-        <div class="hero-subtitle">
-            Upload a road image to classify it into <b>Pothole Issues</b>,
-            <b>Damaged Road issues</b>, or <b>Mixed Issues</b>.<br>
-            This demo uses the best-performing model: <b>EfficientNetV2-S</b>.
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    self.pool = nn.AdaptiveAvgPool2d((1, 1))
+    self.classifier = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(128, 128),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(128, num_classes),
+    )
 
+def forward(self, x):
+    x = self.features(x)
+    x = self.pool(x)
+    x = self.classifier(x)
+    return x
+```
 
-# =========================================================
-# MODEL
-# =========================================================
-def build_model() -> nn.Module:
-    model = models.efficientnet_v2_s(weights=None)
-    in_features = model.classifier[1].in_features
-    model.classifier[1] = nn.Linear(in_features, len(CLASS_NAMES))
+def build_model(model_name: str) -> nn.Module:
+if model_name == "EfficientNetV2-S":
+model = models.efficientnet_v2_s(weights=None)
+in_features = model.classifier[1].in_features
+model.classifier[1] = nn.Linear(in_features, len(CLASS_NAMES))
+return model
+
+```
+if model_name == "ConvNeXt-Tiny":
+    model = models.convnext_tiny(weights=None)
+    in_features = model.classifier[2].in_features
+    model.classifier[2] = nn.Linear(in_features, len(CLASS_NAMES))
     return model
 
+if model_name == "Custom CNN":
+    return CNNBaseline(num_classes=len(CLASS_NAMES))
+
+raise ValueError(f"Unknown model name: {model_name}")
+```
+
+def get_available_models() -> Dict[str, Path]:
+available = {}
+for name, path in MODEL_FILES.items():
+if path.exists():
+available[name] = path
+return available
 
 @st.cache_resource
-def load_model() -> nn.Module:
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model file not found at: {MODEL_PATH}")
+def load_model(model_name: str) -> nn.Module:
+model_path = MODEL_FILES[model_name]
+if not model_path.exists():
+raise FileNotFoundError(f"Model file not found: {model_path}")
 
-    model = build_model()
-    state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
-    model.load_state_dict(state_dict)
-    model.to(DEVICE)
-    model.eval()
-    return model
+```
+model = build_model(model_name)
+state_dict = torch.load(model_path, map_location=DEVICE)
+model.load_state_dict(state_dict)
+model.to(DEVICE)
+model.eval()
+return model
+```
 
+# =========================================================
+
+# TRANSFORMS
+
+# =========================================================
 
 transform = transforms.Compose([
-    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    ),
+transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+transforms.ToTensor(),
+transforms.Normalize(
+mean=[0.485, 0.456, 0.406],
+std=[0.229, 0.224, 0.225]
+),
 ])
 
-
 # =========================================================
+
 # PREDICTION
+
 # =========================================================
+
 def predict_image(model: nn.Module, image: Image.Image) -> Tuple[str, float, np.ndarray]:
-    img = image.convert("RGB")
-    tensor = transform(img).unsqueeze(0).to(DEVICE)
+img = image.convert("RGB")
+tensor = transform(img).unsqueeze(0).to(DEVICE)
 
-    with torch.no_grad():
-        logits = model(tensor)
-        probs = F.softmax(logits, dim=1).cpu().numpy()[0]
+```
+with torch.no_grad():
+    logits = model(tensor)
+    probs = F.softmax(logits, dim=1).cpu().numpy()[0]
 
-    pred_idx = int(np.argmax(probs))
-    pred_class = CLASS_NAMES[pred_idx]
-    confidence = float(probs[pred_idx])
+pred_idx = int(np.argmax(probs))
+pred_class = CLASS_NAMES[pred_idx]
+confidence = float(probs[pred_idx])
 
-    return pred_class, confidence, probs
-
+return pred_class, confidence, probs
+```
 
 # =========================================================
+
 # PLACEHOLDER EXPLAINABILITY
-# Replace with your real Grad-CAM later if needed
+
 # =========================================================
+
 def generate_placeholder_overlay(image: Image.Image) -> Tuple[Image.Image, Image.Image]:
-    img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
-    arr = np.array(img).astype(np.float32) / 255.0
+img = image.convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
+arr = np.array(img).astype(np.float32) / 255.0
 
-    h, w = arr.shape[:2]
-    yy, xx = np.mgrid[0:h, 0:w]
+```
+h, w = arr.shape[:2]
+yy, xx = np.mgrid[0:h, 0:w]
 
-    center_y, center_x = h * 0.62, w * 0.55
-    dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
-    dist = dist / (dist.max() + 1e-8)
+center_y, center_x = h * 0.62, w * 0.55
+dist = np.sqrt((yy - center_y) ** 2 + (xx - center_x) ** 2)
+dist = dist / (dist.max() + 1e-8)
 
-    heat = 1.0 - dist
-    heat = np.clip(heat, 0, 1)
+heat = 1.0 - dist
+heat = np.clip(heat, 0, 1)
 
-    # build colored heatmap
-    heat_rgb = np.zeros((h, w, 3), dtype=np.float32)
-    heat_rgb[..., 0] = heat
-    heat_rgb[..., 1] = heat * 0.45
-    heatmap_img = (heat_rgb * 255).astype(np.uint8)
+heat_rgb = np.zeros((h, w, 3), dtype=np.float32)
+heat_rgb[..., 0] = heat
+heat_rgb[..., 1] = heat * 0.45
+heatmap_img = (heat_rgb * 255).astype(np.uint8)
 
-    overlay = 0.62 * arr + 0.38 * heat_rgb
-    overlay = np.clip(overlay, 0, 1)
-    overlay_img = (overlay * 255).astype(np.uint8)
+overlay = 0.62 * arr + 0.38 * heat_rgb
+overlay = np.clip(overlay, 0, 1)
+overlay_img = (overlay * 255).astype(np.uint8)
 
-    return Image.fromarray(heatmap_img), Image.fromarray(overlay_img)
-
+return Image.fromarray(heatmap_img), Image.fromarray(overlay_img)
+```
 
 # =========================================================
+
+# MODEL SELECTION
+
+# =========================================================
+
+available_models = get_available_models()
+
+if len(available_models) == 0:
+st.error(
+"No model files were found in Frontend/models/. Please add at least one of these files: "
+"efficientnet_v2_s_best.pth, convnext_tiny_best.pth, cnn_baseline_best.pth"
+)
+st.stop()
+
+selected_model_name = st.selectbox(
+"Select model for live prediction",
+list(available_models.keys()),
+index=0,
+)
+
+st.markdown(
+f""" <div class="info-box"> <b>Selected Model:</b> {selected_model_name}<br>
+Live prediction currently uses the selected model above.
+The comparison table below still shows the saved project results for all three trained models. </div>
+""",
+unsafe_allow_html=True,
+)
+
+# =========================================================
+
 # FILE UPLOADER
+
 # =========================================================
+
 uploaded_file = st.file_uploader(
-    "Upload a road image",
-    type=["jpg", "jpeg", "png", "webp"],
+"Upload a road image",
+type=["jpg", "jpeg", "png", "webp"],
 )
 
 if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-    model = load_model()
-    pred_class, confidence, probs = predict_image(model, image)
+image = Image.open(uploaded_file).convert("RGB")
+model = load_model(selected_model_name)
+pred_class, confidence, probs = predict_image(model, image)
 
-    top_indices = np.argsort(probs)[::-1]
-    top_df = pd.DataFrame({
-        "Class": [CLASS_NAMES[i] for i in top_indices],
-        "Confidence": [float(probs[i]) for i in top_indices],
-    })
+```
+top_indices = np.argsort(probs)[::-1]
+top_df = pd.DataFrame({
+    "Class": [CLASS_NAMES[i] for i in top_indices],
+    "Confidence": [float(probs[i]) for i in top_indices],
+})
 
-    # =====================================================
-    # TOP METRICS
-    # =====================================================
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-title">Predicted Class</div>
-                <div class="metric-value" style="font-size:1.18rem;">{pred_class}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with c2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-title">Confidence</div>
-                <div class="metric-value">{confidence:.4f}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with c3:
-        st.markdown(
-            """
-            <div class="metric-card">
-                <div class="metric-title">Best Model</div>
-                <div class="metric-value" style="font-size:1.18rem;">EfficientNetV2-S</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("<div class='section-title'>Prediction Overview</div>", unsafe_allow_html=True)
-
-    left_col, right_col = st.columns([1.05, 0.95])
-
-    with left_col:
-        st.image(image, caption="Uploaded Image", use_container_width=True)
-
-    with right_col:
-        st.markdown(
-            f"""
-            <div class="prediction-box">
-                <b>Prediction:</b> {pred_class}<br><br>
-                <b>Confidence Score:</b> {confidence:.4f}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("<div class='soft-note'>Top class probabilities</div>", unsafe_allow_html=True)
-        st.dataframe(
-            top_df.style.format({"Confidence": "{:.4f}"}),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        fig, ax = plt.subplots(figsize=(7, 4))
-        ax.bar(top_df["Class"], top_df["Confidence"])
-        ax.set_ylabel("Confidence")
-        ax.set_title("Class Probability Comparison")
-        plt.xticks(rotation=12)
-        st.pyplot(fig)
-        plt.close(fig)
-
-    # =====================================================
-    # TABS
-    # =====================================================
-    tab1, tab2, tab3 = st.tabs(["Explainability", "Model Details", "How to Read Results"])
-
-    with tab1:
-        st.markdown("<div class='section-title'>Grad-CAM Explanation</div>", unsafe_allow_html=True)
-        st.markdown(
-            "<div class='soft-note'>This placeholder heatmap keeps the interface polished. You can replace it later with your exact Grad-CAM output.</div>",
-            unsafe_allow_html=True,
-        )
-
-        heatmap_img, overlay_img = generate_placeholder_overlay(image)
-
-        g1, g2, g3 = st.columns(3)
-        with g1:
-            st.image(image.resize((IMAGE_SIZE, IMAGE_SIZE)), caption="Preprocessed Image", use_container_width=True)
-        with g2:
-            st.image(heatmap_img, caption="Grad-CAM Heatmap", use_container_width=True)
-        with g3:
-            st.image(overlay_img, caption="Overlay", use_container_width=True)
-
-    with tab2:
-        st.markdown("<div class='section-title'>Model Details</div>", unsafe_allow_html=True)
-
-        info1, info2 = st.columns(2)
-        with info1:
-            st.markdown(
-                """
-                <div class="info-box">
-                    <b>Architecture:</b> EfficientNetV2-S<br>
-                    <b>Task:</b> 3-class road issue classification<br>
-                    <b>Input Size:</b> 224 × 224<br>
-                    <b>Deployment:</b> Streamlit
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with info2:
-            st.markdown(
-                """
-                <div class="info-box">
-                    <b>Output Classes:</b><br>
-                    1. Pothole Issues<br>
-                    2. Damaged Road issues<br>
-                    3. Mixed Issues
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    with tab3:
-        st.markdown("<div class='section-title'>How to Interpret the Output</div>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            - **Predicted Class** is the model's most likely class.  
-            - **Confidence Score** is the probability assigned to that class.  
-            - **Top Predictions** show how strongly the model considered the other classes.  
-            - **Grad-CAM** highlights which road region most influenced the prediction.
-            """
-        )
-
-else:
+# =====================================================
+# TOP METRICS
+# =====================================================
+c1, c2, c3 = st.columns(3)
+with c1:
     st.markdown(
-        """
-        <div class="info-box">
-            Upload a road image to begin classification.  
-            The app will display the predicted class, confidence score, class probabilities,
-            and an explanation view.
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Predicted Class</div>
+            <div class="metric-value" style="font-size:1.18rem;">{pred_class}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+with c2:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Confidence</div>
+            <div class="metric-value">{confidence:.4f}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with c3:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Live Model</div>
+            <div class="metric-value" style="font-size:1.18rem;">{selected_model_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("<div class='section-title'>Prediction Overview</div>", unsafe_allow_html=True)
+
+left_col, right_col = st.columns([1.05, 0.95])
+
+with left_col:
+    st.image(image, caption="Uploaded Image", use_container_width=True)
+
+with right_col:
+    st.markdown(
+        f"""
+        <div class="prediction-box">
+            <b>Prediction:</b> {pred_class}<br><br>
+            <b>Confidence Score:</b> {confidence:.4f}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='soft-note'>Top class probabilities</div>", unsafe_allow_html=True)
+    st.dataframe(
+        top_df.style.format({"Confidence": "{:.4f}"}),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    prob_chart_df = top_df.set_index("Class")
+    st.bar_chart(prob_chart_df)
+
+# =====================================================
+# TABS
+# =====================================================
+tab1, tab2, tab3 = st.tabs(["Explainability", "Model Details", "How to Read Results"])
+
+with tab1:
+    st.markdown("<div class='section-title'>Grad-CAM Style Explanation</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='soft-note'>This is a styled placeholder overlay. You can replace it later with your exact Grad-CAM implementation if you want.</div>",
+        unsafe_allow_html=True,
+    )
+
+    heatmap_img, overlay_img = generate_placeholder_overlay(image)
+
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        st.image(image.resize((IMAGE_SIZE, IMAGE_SIZE)), caption="Preprocessed Image", use_container_width=True)
+    with g2:
+        st.image(heatmap_img, caption="Heatmap", use_container_width=True)
+    with g3:
+        st.image(overlay_img, caption="Overlay", use_container_width=True)
+
+with tab2:
+    st.markdown("<div class='section-title'>Model Details</div>", unsafe_allow_html=True)
+
+    info1, info2 = st.columns(2)
+    with info1:
+        st.markdown(
+            f"""
+            <div class="info-box">
+                <b>Architecture:</b> {selected_model_name}<br>
+                <b>Task:</b> 3-class road issue classification<br>
+                <b>Input Size:</b> 224 × 224<br>
+                <b>Deployment:</b> Streamlit
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with info2:
+        st.markdown(
+            """
+            <div class="info-box">
+                <b>Output Classes:</b><br>
+                1. Pothole Issues<br>
+                2. Damaged Road issues<br>
+                3. Mixed Issues
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+with tab3:
+    st.markdown("<div class='section-title'>How to Interpret the Output</div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        - **Predicted Class** is the model's most likely class.  
+        - **Confidence Score** is the probability assigned to that class.  
+        - **Top Predictions** show how strongly the model considered the other classes.  
+        - **Overlay** highlights which road region most influenced the prediction.
+        """
+    )
+```
+
+else:
+st.markdown(
+""" <div class="info-box">
+Upload a road image to begin classification.
+The app will display the predicted class, confidence score, class probabilities,
+and an explanation view. </div>
+""",
+unsafe_allow_html=True,
+)
 
 # =========================================================
-# FOOTER
+
+# MODEL COMPARISON
+
 # =========================================================
+
+st.markdown("<div class='section-title'>Model Comparison</div>", unsafe_allow_html=True)
 st.markdown(
-    """
-    <div class="footer-box">
-        <b>Project:</b> Explainable Transfer Learning for Road Damage and Surface Defect Classification in Smart City Infrastructure Monitoring<br>
-        Built with Streamlit, PyTorch, EfficientNetV2-S, and explainability support.
-    </div>
-    """,
-    unsafe_allow_html=True,
+"<div class='soft-note'>This section compares the three trained models from the project.</div>",
+unsafe_allow_html=True,
+)
+
+st.dataframe(
+MODEL_RESULTS.style.format({
+"Accuracy": "{:.4f}",
+"Macro F1": "{:.4f}",
+"Weighted F1": "{:.4f}",
+"Top-2 Accuracy": "{:.4f}",
+"Inference Time (ms)": "{:.3f}",
+"Model Size (MB)": "{:.2f}",
+}),
+use_container_width=True,
+hide_index=True,
+)
+
+best_row = MODEL_RESULTS.loc[MODEL_RESULTS["Accuracy"].idxmax()]
+st.markdown(
+f""" <div class="info-box"> <b>Best Overall Model:</b> {best_row["Model"]}<br> <b>Accuracy:</b> {best_row["Accuracy"]:.4f}<br> <b>Macro F1:</b> {best_row["Macro F1"]:.4f} </div>
+""",
+unsafe_allow_html=True,
+)
+
+# =========================================================
+
+# ADVANCED FOOTER
+
+# =========================================================
+
+st.markdown("---")
+
+f1, f2, f3 = st.columns([1.3, 1, 1])
+
+with f1:
+st.markdown("### Road Issues Detection")
+st.markdown(
+"""
+Explainable transfer learning prototype for road damage classification
+in smart city infrastructure monitoring.
+"""
+)
+
+with f2:
+st.markdown("### Project")
+st.markdown("- Home")
+st.markdown("- Model Comparison")
+st.markdown("- Explainability")
+st.markdown("- Deployment")
+
+with f3:
+st.markdown("### Contact")
+st.markdown("**Name:** Akshit Rohilla")
+st.markdown("**Email:** [akshitrohilla.in@gmail.com](mailto:akshitrohilla.in@gmail.com)")
+
+st.markdown("---")
+st.markdown(
+""" <div style="display:flex; justify-content:space-between; color:#475569; font-size:0.95rem;"> <div>© 2026 Road Issues Detection. All rights reserved.</div> <div>Student project · Smart City Infrastructure Monitoring</div> </div>
+""",
+unsafe_allow_html=True,
 )
