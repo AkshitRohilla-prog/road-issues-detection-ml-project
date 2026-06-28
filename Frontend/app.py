@@ -140,16 +140,6 @@ padding-top: 1rem;
     line-height: 1.6;
 }
 
-.footer-box {
-    margin-top: 28px;
-    padding: 18px;
-    background: #f8fafc;
-    border-radius: 18px;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    font-size: 0.95rem;
-}
-
 .stDataFrame {
     border-radius: 16px;
     overflow: hidden;
@@ -197,7 +187,7 @@ st.markdown(
     - Upload a clear road image  
     - JPG / PNG / WEBP supported  
     - Live prediction uses EfficientNetV2-S  
-    - Comparison table shows all 3 trained project models
+    - Comparison table shows all 3 trained project models  
     """
 )
 ```
@@ -275,7 +265,7 @@ return pred_class, confidence, probs
 
 # =========================================================
 
-# PLACEHOLDER EXPLAINABILITY OVERLAY
+# PLACEHOLDER EXPLAINABILITY
 
 # =========================================================
 
@@ -329,9 +319,7 @@ top_df = pd.DataFrame({
     "Confidence": [float(probs[i]) for i in top_indices],
 })
 
-# =====================================================
 # TOP METRICS
-# =====================================================
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(
@@ -391,12 +379,9 @@ with right_col:
         hide_index=True,
     )
 
-    prob_chart_df = top_df.set_index("Class")
-    st.bar_chart(prob_chart_df)
+    st.bar_chart(top_df.set_index("Class"))
 
-# =====================================================
 # TABS
-# =====================================================
 tab1, tab2, tab3 = st.tabs(["Explainability", "Model Details", "How to Read Results"])
 
 with tab1:
@@ -453,7 +438,7 @@ with tab3:
         - **Predicted Class** is the model's most likely class.  
         - **Confidence Score** is the probability assigned to that class.  
         - **Top Predictions** show how strongly the model considered the other classes.  
-        - **Overlay** highlights which road region most influenced the prediction.
+        - **Overlay** highlights which road region most influenced the prediction.  
         """
     )
 ```
